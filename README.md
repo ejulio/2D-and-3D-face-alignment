@@ -1,3 +1,9 @@
+# Changes
+
+I made some changes to allow landmark detection without requiring the bounding boxes in torch format. It is only required to provide a .csv file with the bounding box. Also, I made a change to save the detected landmarks to a file with the same name as the input file.
+
+Now on is original README.
+
 # How far are we from solving the 2D \& 3D Face Alignment problem? (and a dataset of 230,000 3D facial landmarks)
 
 This repository implements a demo of the networks described in "How far are we from solving the 2D \& 3D Face Alignment problem? (and a dataset of 230,000 3D facial landmarks)" paper. Please visit [our](https://www.adrianbulat.com) webpage or read bellow for instructions on how to run the code and access the dataset.
@@ -48,7 +54,7 @@ th main.lua --help
 
 ## Dataset
 
-You can download the annotations alongside the images used by visiting [our page](https://www.adrianbulat.com/face-alignment). 
+You can download the annotations alongside the images used by visiting [our page](https://www.adrianbulat.com/face-alignment).
 
 
 

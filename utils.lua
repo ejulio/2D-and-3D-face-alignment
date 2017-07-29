@@ -1,21 +1,13 @@
-local py = require 'fb.python' -- Required for plotting
-
--- Import python libraries and set pairs
-py.exec([=[
-import numpy as np
-import matplotlib.pyplot as plt
-]=])
-
 local utils = {}
 
 function utils.getTransform(center, scale, res)
 	local h = 200*scale
 	local t = torch.eye(3)
-	
+
 	-- Scale
 	t[1][1] = res/h
 	t[2][2] = res/h
-	
+
 	-- Translate
 	t[1][3] = res*(-center[1]/h+0.5)
 	t[2][3] = res*(-center[2]/h+0.5)
@@ -42,7 +34,7 @@ function utils.crop(img, center, scale, res)
     local l2 = utils.transform({res,res}, center, scale, res, true)
 
     local pad = math.floor(torch.norm((l1 - l2):float())/2 - (l2[1]-l1[1])/2)
-    
+
     if img:nDimension() < 3 then
       img = torch.repeatTensor(img,3,1,1)
     end
@@ -71,7 +63,7 @@ function utils.getPreds(heatmaps, center, scale)
     preds[{{}, {}, 1}]:apply(function(x) return (x - 1) % heatmaps:size(4) + 1 end)
     preds[{{}, {}, 2}]:add(-1):div(heatmaps:size(3)):floor():add(1)
 
-    for i = 1,preds:size(1) do        
+    for i = 1,preds:size(1) do
         for j = 1,preds:size(2) do
             local hm = heatmaps[{i,j,{}}]
             local pX, pY = preds[{i,j,1}], preds[{i,j,2}]
@@ -161,11 +153,11 @@ function table.copy(t)
 end
 
 function utils.get_normalisation(bbox)
-    local minX, minY, maxX, maxY = unpack(bbox:totable())
-    
+    local minX, minY, maxX, maxY = unpack(bbox)
+
     local center = torch.FloatTensor{maxX-(maxX-minX)/2, maxY-(maxY-minY)/2}
     center[2] =center[2]-((maxY-minY)*0.12)
-    
+
     return center, (maxX-minY+maxY-minY)/195, math.sqrt((maxX-minX)*(maxY-minY))
 end
 
@@ -179,37 +171,32 @@ function utils.bounding_box(iterable)
     return center, (maxs[1]-mins[1]+maxs[2]-mins[2])/195, math.sqrt((maxs[1]-mins[1])*(maxs[2]-mins[2])) --center, scale, normby
 end
 
--- Requires fb.python
-function utils.plot(surface, points)
-py.exec([=[
-plt.imshow(input.swapaxes(0,1).swapaxes(1,2))
-plt.plot(preds[0:17,0],preds[0:17,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[17:22,0],preds[17:22,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[22:27,0],preds[22:27,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[27:31,0],preds[27:31,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[31:36,0],preds[31:36,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[36:42,0],preds[36:42,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[42:48,0],preds[42:48,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[48:60,0],preds[48:60,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-plt.plot(preds[60:68,0],preds[60:68,1],marker='o',markersize=6,linestyle='-',color='w',lw=2)
-
-plt.show()
-]=],{input=surface:float():view(3,256,256), preds = points})	
-end
-
 function utils.readpts(file_path)
 	lines = {}
 	for line in io.lines(file_path) do
 		lines[#lines+1] = line
 	end
-	
+
 	local num_points = tonumber(lines[2]:split(' ')[2])
 	local pts = torch.Tensor(num_points,2)
 	for i = 4,3+num_points do
 		pts[{{i-3},{}}] = torch.Tensor{lines[i]:split(' ')[1],lines[i]:split(' ')[2]}
 	end
-	
+
 	return pts
+end
+
+function utils.read_bbox(file_path)
+    local file = io.open(file_path, 'r')
+    file_content = file:read('*all')
+    file:close()
+    local bbox = {}
+    local i = 1
+    for match in string.gmatch(file_content, '([^,]+)') do
+        bbox[i] = tonumber(match)
+        i = i + 1
+    end
+    return bbox
 end
 
 function utils.getFileList(opts)
@@ -233,45 +220,55 @@ function utils.getFileList(opts)
             data_pts.center = center
             data_pts.points = pts
             data_pts.bbox_size = normby
+            data_pts.file_name = f
 
             filesList[#filesList+1] = data_pts
-	elseif paths.filep(data_path..f:sub(1,#f-4)..'_bb.t7') then -- TODO: Improve this
-	    local center, scale, normby = utils.get_normalisation(torch.load(data_path..f:sub(1,#f-4)..'_bb.t7')) -- minX, minY, maxX, maxY
-	    data_pts.image = data_path..f
+        elseif paths.filep(data_path..f:sub(1,#f-4)..'_bb.t7') then -- TODO: Improve this
+            local data_pts = {}
+            local bbox = torch.load(data_path..f:sub(1,#f-4)..'_bb.t7')
+            local center, scale, normby = utils.get_normalisation(bbox:totable()) -- minX, minY, maxX, maxY
+            data_pts.image = data_path..f
             data_pts.scale = scale
             data_pts.center = center
             data_pts.points = torch.zeros(68,2) -- holder for pts
-            data_pts.bbox_size = normby	    
+            data_pts.bbox_size = normby
+            data_pts.file_name = f
+
+            filesList[#filesList+1] = data_pts
+        elseif paths.filep(data_path..f:sub(1,#f-4)..'_bb.csv') then
+            -- read a bounding box from a csv file in the format
+            -- minX, minY, maxX, maxY
+            local data_pts = {}
+            local bbox = utils.read_bbox(data_path..f:sub(1,#f-4)..'_bb.csv')
+            local center, scale, normby = utils.get_normalisation(bbox)
+            data_pts.image = data_path..f
+            data_pts.scale = scale
+            data_pts.center = center
+            data_pts.points = torch.zeros(68,2) -- holder for pts
+            data_pts.bbox_size = normby
+            data_pts.file_name = f
+
+            filesList[#filesList+1] = data_pts
         end
+
     end
     print('Found '..#filesList..' images')
     return filesList
 end
 
-function utils.calculateMetrics(dists)
-local errors = torch.mean(dists,1):view(dists:size(2))
-py.exec([=[
-axes1 = np.linspace(0,1,1000)
-axes2 = np.zeros(1000)
-print(errors.shape[0])
-for i in range(1000):
-    axes2[i] = (errors<axes1[i]).sum()/float(errors.shape[0])
-
-plt.xlim(0,7)
-plt.ylim(0,100)
-plt.yticks(np.arange(0,110,10))
-plt.xticks(np.arange(0,8,1))
-
-plt.grid()
-plt.title('NME (%)', fontsize=20)
-plt.xlabel('NME (%)', fontsize=16)
-plt.ylabel('Test Images (%)', fontsize=16)
-plt.plot(axes1*100,axes2*100,'b-',label='FAN (Ours)',lw=3)
-plt.legend(loc=4, fontsize=16)
-
-plt.show()
-print('AUC: ',np.sum(axes2[:70])/70)
-]=],{errors = errors})
+function utils.write_csv(file_path, tensor)
+    local out = io.open(file_path, 'w')
+    for i=1, tensor:size(1) do
+        for j=1, tensor:size(2) do
+            out:write(tensor[i][j])
+            if j == tensor:size(2) then
+                out:write('\n')
+            else
+                out:write(',')
+            end
+        end
+    end
+    out:close()
 end
 
 return utils

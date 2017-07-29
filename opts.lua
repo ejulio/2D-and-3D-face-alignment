@@ -12,6 +12,7 @@ local function parse( arg )
     cmd:option('-model', 'models/2D-FAN.t7','Path to the t7 model')
     cmd:option('-path',  'dataset/LS3D-W', 'Path to the dataset.')
     cmd:option('-device', 'cuda', 'Options: cpu, gpu')
+    cmd:option('-output', './', 'Path to write output landmarks')
 
     cmd:text()
 
